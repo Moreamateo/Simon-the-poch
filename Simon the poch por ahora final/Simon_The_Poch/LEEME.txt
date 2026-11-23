@@ -1,0 +1,22 @@
+SIMON THE POCH - ACTUALIZACIÓN DE GIRO Y BOTONES
+
+Abrí index.html desde un navegador moderno (Chrome, Edge, Firefox). Conservá la carpeta recursos junto al HTML.
+
+BOTONES: desde el centro, flecha izquierda o derecha = mirar a esa puerta.
+Desde izquierda, solo la flecha derecha = volver al centro.
+Desde derecha, solo la flecha izquierda = volver al centro.
+Las puertas conservan sus estados independientemente.
+
+Se reemplazaron los 10 fotogramas de giro derecho por los originales del ZIP
+10_fotogramas_giro_derecha_perspectiva_real. Los 10 del giro izquierdo y los
+14 de las puertas originales no se modificaron.
+Se incluyen ambos botones metálicos con transparencia PNG.
+
+Los recursos se cargan por rutas relativas; no se requieren servicios externos.
+
+ACTUALIZACION 2026-11-20 — PERSISTENCIA VISUAL DE PUERTAS
+- Cada vista lateral usa la imagen abierta o cerrada de acuerdo al estado independiente de su puerta.
+- Se quitaron las persianas CSS duplicadas y los indicadores de puerta en el centro.
+- Los giros preservan visualmente la puerta cerrada durante la llegada o la salida, mediante fundido sobre la imagen cerrada original.
+- La imagen final se pinta antes de retirar la capa de animación.
+- Se conservan menú, música, cámaras, energía, reloj e introducción.
