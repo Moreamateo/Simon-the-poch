@@ -51,3 +51,56 @@
  style.textContent=css;
  document.head.appendChild(style);
 })();
+
+/* Transición de cámaras: al tocar el monitor la oficina hace zoom hacia la pantalla, se oscurece y las cámaras se encienden.
+   Al salir hace el zoom inverso. Ajustá los tiempos (ms) y el zoom aquí abajo. */
+(function(){
+ const ZOOM_IN_MS=300,ZOOM_OUT_MS=200,CAM_ON_MS=220,ZOOM=3.4;
+ const actOrig=window.act;if(typeof actOrig!=='function')return;
+ const st=document.createElement('style');
+ st.textContent='body.cam-zooming .stage{pointer-events:none}';document.head.appendChild(st);
+ let busy=false;
+ const origin=()=>{
+  const z=document.getElementById('cameraZone').getBoundingClientRect(),o=document.getElementById('officeScreen').getBoundingClientRect();
+  const x=Math.min(100,Math.max(0,(z.left+z.width/2-o.left)/o.width*100)),y=Math.min(100,Math.max(0,(z.top+z.height/2-o.top)/o.height*100));
+  return x.toFixed(1)+'% '+y.toFixed(1)+'%';
+ };
+ window.act=function(name,fromPC){
+  if(name!=='camera')return actOrig.apply(this,arguments);
+  if(busy)return;
+  const office=document.getElementById('officeScreen'),cams=document.getElementById('cameraScreen');
+  // Abrir (solo desde el monitor, con las mismas condiciones que el juego)
+  if(!showCamera&&fromPC&&running&&!blackout&&!introActive&&!animating()&&cameraMotion.view==='center'){
+   busy=true;document.body.classList.add('cam-zooming');
+   try{beep(120,.35,'triangle',.05)}catch{}
+   const o=origin();
+   const zin=office.animate([
+    {transform:'scale(1)',filter:'brightness(1)',transformOrigin:o,offset:0},
+    {transform:'scale('+(ZOOM*.8)+')',filter:'brightness(.8)',transformOrigin:o,offset:.7},
+    {transform:'scale('+ZOOM+')',filter:'brightness(.05)',transformOrigin:o,offset:1}
+   ],{duration:ZOOM_IN_MS,easing:'cubic-bezier(.55,0,.85,.45)',fill:'forwards'});
+   const done=()=>{
+    actOrig.call(window,'camera',true);   // el juego muestra las cámaras (update() oculta la oficina)
+    zin.cancel();
+    cams.animate([
+     {opacity:0,transform:'scale(1.16)',filter:'brightness(2.4) contrast(1.3)'},
+     {opacity:1,transform:'scale(1)',filter:'brightness(1) contrast(1)'}
+    ],{duration:CAM_ON_MS,easing:'ease-out'});
+    document.body.classList.remove('cam-zooming');busy=false;
+   };
+   zin.onfinish=done;zin.oncancel=()=>{document.body.classList.remove('cam-zooming');busy=false};
+   return;
+  }
+  // Cerrar: vuelve la oficina con el zoom inverso
+  const wasOpen=showCamera;
+  const r=actOrig.apply(this,arguments);
+  if(wasOpen&&!showCamera){
+   const o=origin();
+   office.animate([
+    {transform:'scale('+(ZOOM*.55)+')',filter:'brightness(.15)',transformOrigin:o},
+    {transform:'scale(1)',filter:'brightness(1)',transformOrigin:o}
+   ],{duration:ZOOM_OUT_MS,easing:'cubic-bezier(.2,.7,.3,1)'});
+  }
+  return r;
+ };
+})();

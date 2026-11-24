@@ -48,10 +48,24 @@ function retreatSimon(scream=false){
  if(scream)playSpatialSound('scream',0,.65,4500);
  planSimonRoute(next,from);moveIn=nightSettings().retreat;retreatGrace=moveIn;dangerTime=0;defenseTime=0;ductDepth=0;
 }
+/* Golpes fuertes en la puerta cuando Simón se rinde y se va: audio recursos/sonidos/golpes_puerta.mp3, estéreo según el lado. */
+let knockStop=null;
+function stopDoorKnocks(){if(knockStop){knockStop();knockStop=null}}
+function playDoorKnocks(side){
+ if(side!=='left'&&side!=='right')return;
+ if(muted||!soundContext||soundContext.state!=='running'||!spatialBuffers.knock)return;
+ stopDoorKnocks();
+ const ctx=soundContext,source=ctx.createBufferSource(),gain=ctx.createGain(),panner=ctx.createStereoPanner();
+ source.buffer=spatialBuffers.knock;gain.gain.value=1.8;panner.pan.value=side==='left'?-1:1;
+ source.connect(gain);gain.connect(panner);panner.connect(ctx.destination);
+ knockStop=()=>{try{source.stop()}catch{}for(const n of [source,gain,panner])try{n.disconnect()}catch{}};
+ source.onended=()=>{if(knockStop)knockStop=null;for(const n of [source,gain,panner])try{n.disconnect()}catch{}};
+ source.start();
+}
 function advanceSimon(dt){
  const c=nightSettings();retreatGrace=Math.max(0,retreatGrace-dt);
  if(routeStep===route.rooms.length-1){
-  if(protectedAccess()){defenseTime+=dt;if(defenseTime>=c.doorHold){retreatSimon();return}}
+  if(protectedAccess()){defenseTime+=dt;if(defenseTime>=c.doorHold){const side=route.guard;retreatSimon();playDoorKnocks(side);return}}
   else defenseTime=0;
   if(room()===11&&ductDepth<2){ductAdvance+=dt;if(ductAdvance>=c.ductStep){ductAdvance-=c.ductStep;ductDepth++;playSpatialSound('duct',0,.22+ductDepth*.14,650+ductDepth*250,true)}return}
   dangerTime+=dt;
@@ -73,13 +87,63 @@ function updateNightUI(){
  if(b){b.hidden=true;b.setAttribute('aria-hidden','true')}
  const duct=$('ductShutter');if(duct)duct.classList.toggle('down',!!gateClosed);
 }
-function resetNightSystems(){clearTimeout(victoryTimer);$('victoryTransition').hidden=true;document.body.classList.remove('attacking');stopSpatialSounds();currentNight=selectedNight;gateClosed=false;ductDepth=0;ductAdvance=0;defenseTime=0;retreatGrace=0;dangerTime=0;}
+function resetNightSystems(){clearTimeout(victoryTimer);stopVictoryFx();document.body.classList.remove('power-out');stopDoorKnocks();document.body.classList.remove('attacking');stopSpatialSounds();currentNight=selectedNight;gateClosed=false;ductDepth=0;ductAdvance=0;defenseTime=0;retreatGrace=0;dangerTime=0;}
+/* Victoria: pantalla negra, "5 AM" -> el 6 cae desde arriba, confeti y sonido de campanas + aplausos. Clic para saltar. */
+let vtTimers=[],vtRaf=0,vtAudioStop=null;
+function stopVictoryFx(){
+ vtTimers.forEach(clearTimeout);vtTimers=[];cancelAnimationFrame(vtRaf);
+ if(vtAudioStop){vtAudioStop();vtAudioStop=null}
+ const v=$('victoryTransition');if(v){v.hidden=true;v.onclick=null;v.replaceChildren()}
+}
+function playVictoryAudio(){
+ if(muted||!soundContext||soundContext.state!=='running')return;
+ const ctx=soundContext,t0=ctx.currentTime,nodes=[],master=ctx.createGain();master.gain.value=.8;master.connect(ctx.destination);
+ // Campanas: cuatro notas ascendentes con armónicos de campana.
+ for(const [f,d] of [[523.25,0],[659.25,.3],[783.99,.6],[1046.5,.95]])for(const [m,amp,dec] of [[1,.5,2.4],[2.76,.18,1.3],[5.4,.07,.6]]){
+  const o=ctx.createOscillator(),g=ctx.createGain();o.type='sine';o.frequency.value=f*m;
+  g.gain.setValueAtTime(.0001,t0+d);g.gain.exponentialRampToValueAtTime(amp*.55,t0+d+.012);g.gain.exponentialRampToValueAtTime(.0001,t0+d+dec);
+  o.connect(g);g.connect(master);o.start(t0+d);o.stop(t0+d+dec+.05);nodes.push(o);
+ }
+ // Aplausos: cientos de palmadas cortas de ruido, más densas hacia el centro.
+ const sr=ctx.sampleRate,len=Math.floor(sr*3.4),buf=ctx.createBuffer(2,len,sr);
+ for(let ch=0;ch<2;ch++){const data=buf.getChannelData(ch);
+  for(let i=0;i<1500;i++){const start=Math.floor((Math.random()+Math.random())/2*(len-900)),n=250+Math.floor(Math.random()*550),amp=.12+Math.random()*.4;
+   for(let k=0;k<n;k++)data[start+k]+=(Math.random()*2-1)*amp*Math.exp(-k/(n*.25));}}
+ const src=ctx.createBufferSource(),hp=ctx.createBiquadFilter(),env=ctx.createGain();
+ src.buffer=buf;hp.type='highpass';hp.frequency.value=700;
+ env.gain.setValueAtTime(.0001,t0+.5);env.gain.linearRampToValueAtTime(.55,t0+1.1);env.gain.setValueAtTime(.55,t0+2.6);env.gain.linearRampToValueAtTime(.0001,t0+3.9);
+ src.connect(hp);hp.connect(env);env.connect(master);src.start(t0+.5);
+ vtAudioStop=()=>{for(const o of [...nodes,src]){try{o.stop()}catch{}}try{master.disconnect()}catch{}};
+}
+function launchConfetti(canvas){
+ if(!canvas)return;const c=canvas.getContext('2d'),dpr=Math.min(2,window.devicePixelRatio||1);
+ const W=canvas.width=Math.floor(innerWidth*dpr),H=canvas.height=Math.floor(innerHeight*dpr);
+ const cols=['#ff4d6d','#ffd23f','#3bceac','#4ea8ff','#c77dff','#ffffff','#ff9f1c'],ps=[];
+ const mk=(x,y,ang,spd,delay)=>ps.push({x,y,vx:Math.cos(ang)*spd*dpr,vy:Math.sin(ang)*spd*dpr,w:(6+Math.random()*7)*dpr,h:(10+Math.random()*9)*dpr,r:Math.random()*6.28,vr:(Math.random()-.5)*.35,s:Math.random()*6.28,c:cols[Math.floor(Math.random()*cols.length)],delay});
+ for(let i=0;i<220;i++)mk(W/2,H*.45,Math.random()*6.283,6+Math.random()*16,0);                               // explosión desde el número
+ for(let i=0;i<70;i++){mk(0,H,-Math.PI/2+Math.random()*.7,14+Math.random()*12,.25);mk(W,H,-Math.PI/2-Math.random()*.7,14+Math.random()*12,.25)} // cañones laterales
+ for(let i=0;i<120;i++)mk(Math.random()*W,-20*dpr-Math.random()*H*.5,Math.PI/2,1+Math.random()*2,.6);         // lluvia desde arriba
+ const t0=performance.now();let last=t0;
+ (function frame(now){
+  const t=(now-t0)/1000,dt=Math.min(.05,(now-last)/1000)*60;last=now;c.clearRect(0,0,W,H);
+  c.globalAlpha=t>3.4?Math.max(0,1-(t-3.4)/.8):1;
+  for(const p of ps){if(t<p.delay)continue;
+   p.vx*=Math.pow(.985,dt);p.vy=p.vy*Math.pow(.985,dt)+.32*dpr*dt;p.s+=.08*dt;p.x+=(p.vx+Math.sin(p.s)*.8*dpr)*dt;p.y+=p.vy*dt;p.r+=p.vr*dt;
+   c.save();c.translate(p.x,p.y);c.rotate(p.r);c.scale(1,Math.abs(Math.cos(p.s)));c.fillStyle=p.c;c.fillRect(-p.w/2,-p.h/2,p.w,p.h);c.restore();}
+  if(t<4.2)vtRaf=requestAnimationFrame(frame);else c.clearRect(0,0,W,H);
+ })(t0);
+}
 function winNight(){
  stopSpatialSounds();unlockedNight=Math.max(unlockedNight,Math.min(5,currentNight+1));selectedNight=Math.min(5,currentNight+1);saveNights();renderNightMenu();
- $('victoryTransition').hidden=false;$('victoryTransition').textContent='6 AM';beep(720,.35,'sine');
- victoryTimer=setTimeout(()=>{$('victoryTransition').hidden=true;$('menu').classList.remove('hidden');syncMenuMusic()},1800);
+ stopVictoryFx();const box=$('victoryTransition');
+ box.innerHTML='<div class="vt-clock"><span class="vt-num"><span class="vt-d vt-old">5</span><span class="vt-d vt-new">6</span></span><span class="vt-am">AM</span></div><canvas id="vtConfetti"></canvas>';
+ box.hidden=false;
+ const finish=()=>{stopVictoryFx();$('menu').classList.remove('hidden');syncMenuMusic()};
+ vtTimers.push(setTimeout(()=>{playVictoryAudio();launchConfetti($('vtConfetti'))},1450));
+ vtTimers.push(setTimeout(()=>{box.onclick=finish},1600));
+ vtTimers.push(setTimeout(finish,6000));
 }
-const SPATIAL_FILES={left:'recursos/sonidos/pasos_izquierda.mp3',right:'recursos/sonidos/pasos_derecha.mp3',scream:'recursos/sonidos/grito_simon.mp3',duct:'recursos/sonidos/alcantarilla.mp3'};
+const SPATIAL_FILES={left:'recursos/sonidos/pasos_izquierda.mp3',right:'recursos/sonidos/pasos_derecha.mp3',scream:'recursos/sonidos/grito_simon.mp3',duct:'recursos/sonidos/alcantarilla.mp3',knock:'recursos/sonidos/golpes_puerta.mp3'};
 const spatialBytes={};let spatialReady=null,spatialBuffers={},spatialLoading=null,spatialActive=new Map();
 function preloadSpatialAudio(){return spatialReady??=Promise.all(Object.entries(SPATIAL_FILES).map(async([k,url])=>{const r=await fetch(url);if(!r.ok)throw Error(url);spatialBytes[k]=await r.arrayBuffer()}))}
 async function unlockGameAudio(){
