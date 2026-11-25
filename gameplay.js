@@ -87,7 +87,7 @@ function updateNightUI(){
  if(b){b.hidden=true;b.setAttribute('aria-hidden','true')}
  const duct=$('ductShutter');if(duct)duct.classList.toggle('down',!!gateClosed);
 }
-function resetNightSystems(){clearTimeout(victoryTimer);stopVictoryFx();document.body.classList.remove('power-out');stopDoorKnocks();document.body.classList.remove('attacking');stopSpatialSounds();currentNight=selectedNight;gateClosed=false;ductDepth=0;ductAdvance=0;defenseTime=0;retreatGrace=0;dangerTime=0;}
+function resetNightSystems(){noseCount=0;noseLast=0;clearTimeout(victoryTimer);stopVictoryFx();document.body.classList.remove('power-out');stopDoorKnocks();document.body.classList.remove('attacking');stopSpatialSounds();currentNight=selectedNight;gateClosed=false;ductDepth=0;ductAdvance=0;defenseTime=0;retreatGrace=0;dangerTime=0;}
 /* Victoria: pantalla negra, "5 AM" -> el 6 cae desde arriba, confeti y sonido de campanas + aplausos. Clic para saltar. */
 let vtTimers=[],vtRaf=0,vtAudioStop=null;
 function stopVictoryFx(){
@@ -175,3 +175,44 @@ async function startSelectedNight(retry=false){
  catch(error){console.error(error);$('assetError').hidden=false;$('assetError').textContent='No se pudieron cargar los recursos. Abrí el juego desde un servidor local o GitHub Pages y volvé a intentar.'}
  finally{$('startBtn').disabled=false;$('continueBtn').disabled=false}
 }
+
+/* Easter egg: la nariz de Simón (póster de la oficina). Suena un "honk" de peluche; si lo apretás muchas veces seguidas, perdés. */
+const NOSE={x:370,y:413,r:30,w:1671,h:941},NOSE_LIMIT=12,NOSE_DECAY_MS=2500,NOSE_FILE='recursos/sonidos/nariz_simon.mp3';
+let noseCount=0,noseLast=0,noseFileOk=null;
+fetch(NOSE_FILE,{method:'HEAD'}).then(r=>{noseFileOk=r.ok}).catch(()=>{noseFileOk=false});
+function noseSynth(level){
+ // Peluche de goma: dos osciladores levemente desafinados + filtro "vocal"; sube de tono a medida que lo apretás.
+ if(!soundContext||soundContext.state!=='running')return;
+ const t=soundContext.currentTime,base=300+level*14,o1=soundContext.createOscillator(),o2=soundContext.createOscillator(),
+  bp=soundContext.createBiquadFilter(),lp=soundContext.createBiquadFilter(),g=soundContext.createGain();
+ o1.type='sawtooth';o2.type='square';
+ for(const [o,k] of [[o1,1],[o2,1.012]]){o.frequency.setValueAtTime(base*.78*k,t);o.frequency.exponentialRampToValueAtTime(base*1.28*k,t+.05);o.frequency.exponentialRampToValueAtTime(base*.9*k,t+.2)}
+ bp.type='bandpass';bp.frequency.setValueAtTime(900,t);bp.frequency.exponentialRampToValueAtTime(1500,t+.06);bp.frequency.exponentialRampToValueAtTime(800,t+.2);bp.Q.value=2.2;
+ lp.type='lowpass';lp.frequency.value=3200;
+ g.gain.setValueAtTime(.0001,t);g.gain.exponentialRampToValueAtTime(.9,t+.012);g.gain.exponentialRampToValueAtTime(.55,t+.09);g.gain.exponentialRampToValueAtTime(.0001,t+.24);
+ o1.connect(bp);o2.connect(bp);bp.connect(lp);lp.connect(g);g.connect(soundContext.destination);
+ o1.start(t);o2.start(t);o1.stop(t+.26);o2.stop(t+.26);
+}
+function noseHonk(level){
+ if(muted)return;
+ if(noseFileOk){const a=new Audio(NOSE_FILE);a.volume=1;a.playbackRate=1+level*.02;a.play().catch(()=>noseSynth(level));return}
+ noseSynth(level);
+}
+function noseHit(clientX,clientY){
+ const img=$('officeBg')&&$('officeBg').querySelector('.office-photo');if(!img)return false;
+ const r=img.getBoundingClientRect(),s=Math.max(r.width/NOSE.w,r.height/NOSE.h);
+ const px=r.left+(r.width-NOSE.w*s)/2+NOSE.x*s,py=r.top+(r.height-NOSE.h*s)/2+NOSE.y*s;
+ return Math.hypot(clientX-px,clientY-py)<=NOSE.r*s;
+}
+function noseBoop(){
+ const now=performance.now();
+ noseCount=Math.max(0,noseCount-Math.floor((now-noseLast)/NOSE_DECAY_MS))+1;noseLast=now;
+ noseHonk(noseCount);
+ if(noseCount>=NOSE_LIMIT)end(false,'Apretaste demasiado la nariz de Simón... no le gustó.');
+}
+document.addEventListener('click',e=>{
+ if(!running||finished||showCamera||blackout||introActive||cameraMotion.view!=='center'||cameraMotion.turning)return;
+ if(!e.target.closest||!e.target.closest('#officeScreen'))return;
+ if(!noseHit(e.clientX,e.clientY))return;
+ e.stopPropagation();e.preventDefault();noseBoop();
+},true);
