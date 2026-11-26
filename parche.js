@@ -32,6 +32,9 @@
 
  // 2) Menú: lienzo 16:9 (el arte llena el lienzo sin recortes) y hits/flechas en % del arte.
  const css=`
+body{-webkit-user-select:none;user-select:none;-webkit-tap-highlight-color:transparent}
+input,textarea,select{-webkit-user-select:text;user-select:text}
+img,svg{-webkit-user-drag:none}
 .side-door-status,#leftDoorStatus,#rightDoorStatus,.duct-shutter,#ductShutter,.office-look-hint,#officeLookHint{display:none!important;visibility:hidden!important;opacity:0!important}
 @media(orientation:landscape){
  .menu-canvas{width:min(100vw,177.7778dvh)!important;height:auto!important;aspect-ratio:16/9!important;max-height:100dvh!important}
@@ -50,6 +53,8 @@
  style.id='parche-menu-puerta';
  style.textContent=css;
  document.head.appendChild(style);
+ // Doble clic o arrastre no deben pintar de azul (selección) ni arrastrar las fotos del juego.
+ document.addEventListener('dragstart',e=>{if(e.target.closest&&e.target.closest('img,svg'))e.preventDefault()});
 })();
 
 /* Transición de cámaras: al tocar el monitor la oficina hace zoom hacia la pantalla, se oscurece y las cámaras se encienden.

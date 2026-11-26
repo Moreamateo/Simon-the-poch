@@ -1,0 +1,156 @@
+<!DOCTYPE html>
+<html lang="es"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Grafo de Simon the Poch</title>
+<link rel="preconnect" href="https://fonts.googleapis.com"><link href="https://fonts.googleapis.com/css2?family=Special+Elite&family=IBM+Plex+Sans:wght@400;600&display=swap" rel="stylesheet">
+<style>
+/* VOICE: plano técnico de un turno nocturno, sobrio y un poco inquietante
+   IDEA: el monitor de cámaras de seguridad de la oficina, como un plano de vigilancia
+   PICTURE: el mapa de las 11 cámaras con las tres rutas de ataque a la oficina
+   COLOUR and TYPE: fondo casi negro verdoso, tinta fósforo, rojo alarma; Special Elite + IBM Plex Sans
+   LAYOUT: título, mapa grande, luego arquitectura, flujo de llamadas y fichas */
+:root{color-scheme:light dark;--bg:light-dark(#f3f1ea,#0d1210);--panel:light-dark(#ffffff,#141c19);--ink:light-dark(#1b211e,#d9e8df);--mute:light-dark(#5b665f,#8fa59a);--line:light-dark(#b9c2bc,#2f3d37);--acc:light-dark(#b3261e,#ff5a4e);--ok:light-dark(#2f6b4f,#7fd6a6)}
+:root[data-theme=light]{color-scheme:light}:root[data-theme=dark]{color-scheme:dark}
+*{box-sizing:border-box;min-width:0}
+body{margin:0;background:var(--bg);color:var(--ink);font:16px/1.6 "IBM Plex Sans",system-ui,sans-serif;overflow-x:clip}
+.band{padding:clamp(28px,4vw,56px) max(5vw,16px);max-width:1240px;margin:0 auto}
+h1,h2{font-family:"Special Elite",ui-monospace,monospace;font-weight:400;line-height:1.1;text-wrap:balance;margin:0 0 .4em}
+h1{font-size:clamp(32px,5vw,50px)}h2{font-size:clamp(24px,3vw,32px);margin-top:.2em}
+p{max-width:70ch}.mute{color:var(--mute);font-size:14px}
+nav.scroll{display:flex;gap:18px;overflow-x:auto;padding:10px 0;border-block:1px solid var(--line);margin-top:18px;font-size:15px}
+nav a{color:var(--ink);flex:none}
+figure{margin:20px 0 0;background:var(--panel);border:1px solid var(--line);border-radius:10px;padding:14px}
+figure svg{width:100%;height:auto;display:block;color:var(--ink)}
+figcaption{font-size:14px;color:var(--mute);margin-top:8px}
+.grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(min(100%,300px),1fr));gap:16px;margin-top:16px}
+.card{background:var(--panel);border:1px solid var(--line);border-radius:10px;padding:16px}
+.card h3{margin:0 0 6px;font-size:17px}.card p{margin:0;font-size:15px}
+table{border-collapse:collapse;width:100%;font-size:15px;margin-top:12px}
+th,td{padding:8px 10px;border-bottom:1px solid var(--line);text-align:right;white-space:nowrap}th:first-child,td:first-child{text-align:left}
+th{font-weight:600;color:var(--mute)}
+.scroll{overflow-x:auto}code{font-size:.92em;overflow-wrap:anywhere}
+ul{padding-left:1.2em}li{margin:.25em 0;max-width:72ch}
+.warn{border-left:3px solid var(--acc);padding-left:12px}
+html{scroll-padding-top:20px}
+@media(max-width:600px){table{font-size:13px}}
+</style></head><body>
+<header class="band">
+<h1>Simon the Poch, en un grafo</h1>
+<p>Mapa del código de tu juego estilo FNAF, armado con Graphify sobre el commit <code>2ebcb66</code> de <code>main</code>. El juego tiene 4 archivos de lógica (unas 2.000 líneas) y 178 MB de imágenes y sonidos en <code>recursos/</code>. Graphify indexó 61 nodos y 118 relaciones.</p>
+<nav class="scroll"><a href="#mapa">Mapa de cámaras</a><a href="#archivos">Archivos</a><a href="#flujo">Flujo de llamadas</a><a href="#noches">Las 5 noches</a><a href="#sistemas">Sistemas</a><a href="#notas">Cosas a revisar</a></nav>
+</header>
+
+<section class="band" id="mapa">
+<h2>Por dónde camina Simón</h2>
+<p>La IA de Simón solo se mueve por los pasillos de <code>ROOM_GRAPH</code> (11 cámaras). Arranca en la Sala de Simón y elige un destino: el pasillo izquierdo, el derecho o la alcantarilla. Desde ahí ataca la oficina por la puerta o la rejilla que le corresponde.</p>
+<figure><svg id="mapSvg" viewBox="0 0 840 440" role="img" aria-label="Mapa de 11 cámaras conectadas por pasillos; las cámaras 7, 8 y 11 atacan la oficina por la puerta izquierda, la derecha y la rejilla."></svg>
+<figcaption>Líneas grises: pasillos por los que Simón se mueve. Líneas rojas: los tres ataques posibles y la defensa que los frena. La oficina nunca es un atajo, solo un punto final.</figcaption></figure>
+</section>
+
+<section class="band" id="archivos">
+<h2>Cómo se arma el juego</h2>
+<p><code>index.html</code> es el centro: carga los scripts en este orden y todos comparten variables globales (no hay módulos ni imports).</p>
+<figure><svg id="archSvg" viewBox="0 0 840 300" role="img" aria-label="JUGAR.cmd ejecuta iniciar_juego.py, que sirve index.html; index.html carga gameplay.js, su motor interno, parche.js y dev.js, y todos leen recursos."></svg>
+<figcaption>De arriba hacia abajo: cómo arranca y en qué orden se carga cada parte.</figcaption></figure>
+<div class="grid">
+<div class="card"><h3>index.html (1.504 líneas)</h3><p>Pantallas, CSS y el motor: bucle <code>tick</code>, energía, puertas con animación por fotogramas, cámaras, menú, intro y jumpscare. Unas 60 funciones inline.</p></div>
+<div class="card"><h3>gameplay.js (218 líneas)</h3><p>Noches, IA de Simón, audio espacial, pantalla de 6 AM con confeti y el easter egg de la nariz. 39 símbolos.</p></div>
+<div class="card"><h3>parche.js (106 líneas)</h3><p>Reemplaza <code>Element.animate</code> para que el temblor de la puerta no mueva la oficina, y encuadra el menú en 16:9.</p></div>
+<div class="card"><h3>dev.js (148 líneas)</h3><p>Modo programador oculto: escribís <code>pochdev</code> o tocás 7 veces la esquina. Envuelve <code>tick</code>, <code>advanceSimon</code> y <code>saveNights</code> para pausar, congelar a Simón o no guardar.</p></div>
+<div class="card"><h3>JUGAR.cmd + iniciar_juego.py</h3><p>Abren un servidor local en 127.0.0.1 con un puerto libre. Hace falta porque el audio espacial usa <code>fetch</code>, que falla si abrís el HTML como archivo.</p></div>
+<div class="card"><h3>recursos/</h3><p>11 cámaras vacías y 11 con Simón, giros de cámara de la oficina por fotogramas, 9 fotogramas del jumpscare, sonidos con paneo y la música.</p></div>
+</div>
+</section>
+
+<section class="band" id="flujo">
+<h2>Qué llama a qué durante una noche</h2>
+<p>Todo pasa por un solo bucle, <code>tick</code>, que corre en cada frame. No hay temporizadores sueltos para la IA.</p>
+<figure><svg id="callSvg" viewBox="0 0 900 480" role="img" aria-label="Grafo de llamadas: los botones y el bucle tick llaman a advanceSimon, act, flashSewer y noseBoop, que terminan en movimiento, retirada, victoria o derrota."></svg>
+<figcaption>Columna izquierda: lo que dispara cada cadena (un botón o el bucle). A la derecha, las funciones a las que llega. En rojo, los caminos que terminan la noche.</figcaption></figure>
+</section>
+
+<section class="band" id="noches">
+<h2>Las 5 noches se ponen más difíciles así</h2>
+<p>Cada noche dura 180 segundos reales (de 12 a 6 AM). Los valores salen de <code>NIGHT_CONFIG</code> en <code>gameplay.js</code>. El progreso se guarda en <code>localStorage</code> con la clave <code>simon-five-nights-v1</code>.</p>
+<div class="scroll"><table>
+<thead><tr><th>Noche</th><th>Se mueve cada</th><th>Tiempo para reaccionar</th><th>Puerta cerrada para echarlo</th><th>Cambia de ruta</th><th>Va a la alcantarilla</th><th>Costo del flash</th></tr></thead>
+<tbody id="nightRows"></tbody></table></div>
+<p class="mute">Mirar a Simón con la cámara lo frena (de ×1,45 en la noche 1 a ×1,05 en la 5). Después de echarlo, tarda de 8 a 4 segundos en volver a moverse.</p>
+</section>
+
+<section class="band" id="sistemas">
+<h2>Los sistemas del juego</h2>
+<div class="grid">
+<div class="card"><h3>Energía</h3><p>Empieza en 100. Por segundo gasta 0,20 base, más 0,60 por cada puerta, 0,40 la rejilla, 0,23 la luz y 0,12 las cámaras. En 0 se apaga todo y a los 1,6 s perdés.</p></div>
+<div class="card"><h3>Ataque y defensa</h3><p>Cuando Simón llega al final de su ruta tenés que tener cerrada la defensa correcta. Si la sostenés el tiempo de la noche, golpea la puerta y retrocede. Si no, pasan los segundos de reacción y te salta el jumpscare.</p></div>
+<div class="card"><h3>Alcantarilla (CAM 11)</h3><p>Simón avanza dos tramos por el conducto con sonido grave. Con la rejilla cerrada lo frenás. El flash en la CAM 11 cuesta energía y lo manda gritando a mantenimiento.</p></div>
+<div class="card"><h3>Audio espacial</h3><p>Web Audio con paneo estéreo: pasos a la izquierda o derecha según hacia dónde va, el grito al huir, golpes en la puerta y el conducto con filtro grave.</p></div>
+<div class="card"><h3>Victoria y derrota</h3><p>A los 180 s <code>end(true)</code> llama a <code>winNight</code>: desbloquea la noche siguiente, reloj 5→6 AM y confeti. En derrota corre el jumpscare de 9 fotogramas y la pantalla de Game Over.</p></div>
+<div class="card"><h3>Easter egg</h3><p>La nariz del póster hace un “honk”. Si la apretás 12 veces seguidas, Simón se enoja y perdés.</p></div>
+</div>
+</section>
+
+<section class="band" id="notas">
+<h2>Cosas a revisar</h2>
+<ul>
+<li class="warn">Graphify no indexa el JavaScript que está dentro de <code>index.html</code>, que es justo el motor. Por eso las llamadas que salen del HTML (como <code>tick → advanceSimon</code>) las completé leyendo el archivo. Si movés ese script a un <code>main.js</code>, el grafo lo cubriría entero.</li>
+<li><code>AGENTS.md</code> está desactualizado en dos cosas: dice que el juego está en <code>artifacts/Simon_The_Poch/</code> (ahora está en la raíz) y menciona la tecla S para la rejilla, pero no hay atajos de teclado en partida (como bien dice <code>LEEME.txt</code>).</li>
+<li>El sonido de la nariz espera <code>recursos/sonidos/nariz_simon.mp3</code>, que no existe. No rompe nada porque usa un sonido sintetizado de respaldo.</li>
+<li><code>recursos/</code> pesa 178 MB y tiene a la vez <code>giros_fluidos/</code> y <code>giros_fluidos.zip</code>, y dos carpetas de cámaras parecidas (<code>camaras/</code> y <code>camaras_individuales/</code>). Se podría limpiar para que cargue más rápido en GitHub Pages.</li>
+</ul>
+<p class="mute">No modifiqué nada del repositorio. Grafo: Graphify, índice del 25/11/2026, commit 2ebcb66 (igual al último commit de main).</p>
+</section>
+
+<script>
+{
+const esc=s=>String(s).replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+const ACC='var(--acc)',LINE='var(--line)',MUTE='var(--mute)';
+const defs=`<defs><marker id="ar" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0,0L10,5L0,10z" fill="currentColor"/></marker><marker id="arR" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0,0L10,5L0,10z" fill="${ACC}"/></marker></defs>`;
+const box=(x,y,w,h,t,sub,strong)=>`<rect x="${x}" y="${y}" width="${w}" height="${h}" rx="7" fill="var(--panel)" stroke="${strong?ACC:'currentColor'}" stroke-width="${strong?2:1.2}"/><text x="${x+w/2}" y="${y+(sub?h/2-3:h/2+4)}" text-anchor="middle" font-size="13" font-weight="600" fill="currentColor">${esc(t)}</text>${sub?`<text x="${x+w/2}" y="${y+h/2+13}" text-anchor="middle" font-size="11" fill="${MUTE}">${esc(sub)}</text>`:''}`;
+
+/* Mapa */
+const R={1:[300,50,'Sala de Simón'],2:[520,50,'Comedor'],9:[720,50,'Baños'],3:[410,140,'Cocina'],5:[110,120,'Repuestos'],6:[110,230,'Taller'],7:[170,340,'Pasillo izq.'],4:[540,210,'Depósito'],10:[680,280,'Mantenimiento'],8:[530,330,'Pasillo der.'],11:[730,385,'Alcantarilla']};
+const G={1:[2,5,3],2:[1,3,9],3:[1,2,4],4:[3,10],5:[1,6],6:[5,7],7:[6],8:[10],9:[2],10:[4,8,11],11:[10]};
+const OF=[390,400];
+let m=defs;
+for(const a in G)for(const b of G[a])if(+a<b)m+=`<line x1="${R[a][0]}" y1="${R[a][1]}" x2="${R[b][0]}" y2="${R[b][1]}" stroke="${MUTE}" stroke-width="2"/>`;
+const atk=[[7,'puerta izquierda',268,372],[8,'puerta derecha',492,376],[11,'rejilla',575,384]];
+for(const [n,l,lx,ly] of atk){m+=`<line x1="${R[n][0]}" y1="${R[n][1]}" x2="${OF[0]}" y2="${OF[1]}" stroke="${ACC}" stroke-width="2.5" stroke-dasharray="7 5"/>`}
+for(const n in R){const [x,y,t]=R[n];m+=box(x-64,y-20,128,40,`CAM ${n}`,t,n==7||n==8||n==11)}
+m+=`<rect x="${OF[0]-80}" y="${OF[1]-22}" width="160" height="44" rx="7" fill="${ACC}"/><text x="${OF[0]}" y="${OF[1]+5}" text-anchor="middle" font-size="14" font-weight="600" fill="#fff">OFICINA (vos)</text>`;
+for(const [n,l,lx,ly] of atk)m+=`<text x="${lx}" y="${ly}" text-anchor="middle" font-size="11" fill="${ACC}" paint-order="stroke" stroke="var(--panel)" stroke-width="4">${esc(l)}</text>`;
+m+=`<text x="300" y="98" text-anchor="middle" font-size="11" fill="${MUTE}">inicio</text>`;
+document.getElementById('mapSvg').innerHTML=m;
+
+/* Arquitectura */
+let a=defs;
+const A=[[20,20,170,'JUGAR.cmd','doble clic'],[230,20,190,'iniciar_juego.py','servidor local'],[470,20,170,'index.html','página principal']];
+for(const b of A)a+=box(b[0],b[1],b[2],48,b[3],b[4]);
+a+=`<path d="M190,44H226" stroke="currentColor" fill="none" marker-end="url(#ar)"/><path d="M420,44H466" stroke="currentColor" fill="none" marker-end="url(#ar)"/>`;
+const L=[[20,'1. precarga','script inline'],[185,'2. gameplay.js','noches + IA'],[350,'3. motor','script inline'],[515,'4. parche.js','arreglos visuales'],[680,'5. dev.js','modo programador']];
+for(const [x,t,s] of L){a+=box(x,140,145,48,t,s);a+=`<path d="M555,68C555,104 ${x+72},104 ${x+72},136" stroke="currentColor" fill="none" marker-end="url(#ar)"/>`}
+a+=box(250,240,340,44,'recursos/','imágenes, cámaras, jumpscare, audio');
+for(const [x] of L)a+=`<path d="M${x+72},188L${Math.max(260,Math.min(580,x+72))},236" stroke="${MUTE}" stroke-dasharray="3 4" fill="none" marker-end="url(#ar)"/>`;
+a+=`<text x="20" y="112" text-anchor="start" font-size="11" fill="${MUTE}">carga en orden</text>`;
+document.getElementById('archSvg').innerHTML=a;
+
+/* Llamadas */
+const N={
+ bStart:[10,20,'New Game / Continue','botón'],bTick:[10,175,'tick()','cada frame'],bAct:[10,285,'act()','puertas, luz, cámara'],bFlash:[10,345,'flashSewer()','flash en CAM 11'],bGate:[10,392,'toggleSewerGate()','botón rejilla'],bNose:[10,442,'noseBoop()','nariz del póster'],
+ start:[240,20,'startSelectedNight()','gameplay.js'],adv:[240,175,'advanceSimon(dt)','gameplay.js'],pow:[240,235,'energía baja','según lo que uses'],door:[240,285,'togglePhotoDoor()','animación puerta'],
+ intro:[470,20,'playNewGameIntro → reset','index.html'],plan:[690,20,'planSimonRoute()','camino más corto'],move:[690,90,'moveSimonTo()','+ pasos espaciales'],ret:[690,160,'retreatSimon()','+ golpes / grito'],win:[690,250,'end(true) → winNight','6 AM, sigue noche'],lose:[690,400,'end(false) → jumpscare','energía 0, sin defensa o nariz']};
+const W=190,H=40;
+let c=defs;
+const E=[['bStart','start'],['start','intro'],['intro','plan','pickRoute'],['bTick','adv'],['bTick','pow'],['bTick','win','180 s',1],['pow','lose','',1],['adv','plan','cambia ruta'],['adv','move'],['adv','ret','defensa ok'],['adv','lose','',1],['bAct','door'],['bFlash','ret','Simón en 11'],['bNose','lose','',1]];
+const port=(k,side)=>{const [x,y]=N[k];return [side?x+W:x,y+H/2]};
+for(const [s,t,l,red] of E){const [x1,y1]=port(s,1),[x2,y2]=port(t,0);const mx=(x1+x2)/2;c+=`<path d="M${x1},${y1}C${mx},${y1} ${mx},${y2} ${x2-3},${y2}" fill="none" stroke="${red?ACC:'currentColor'}" stroke-width="${red?2:1.2}" opacity="${red?1:.75}" marker-end="url(#${red?'arR':'ar'})"/>`;if(l){const lx=x2-62,ly=y2-6;c+=`<text x="${lx}" y="${ly}" text-anchor="middle" font-size="11" fill="${red?ACC:MUTE}" paint-order="stroke" stroke="var(--panel)" stroke-width="4">${esc(l)}</text>`}}
+c+=`<text x="212" y="416" font-size="11" fill="${MUTE}">cierra la rejilla (gateClosed)</text>`;
+for(const k in N){const [x,y,t,s]=N[k];c+=box(x,y,W,k==='bNose'?34:H,t,s,k==='win'||k==='lose')}
+document.getElementById('callSvg').innerHTML=c;
+
+/* Noches */
+const NC=[[1,[10,14],10,1.3,.04,.15,.5],[2,[8,12],8.5,1.6,.10,.22,.8],[3,[6.5,10],7,1.9,.17,.30,1],[4,[5.2,8],5.6,2.2,.24,.36,1.3],[5,[4,6.8],4.4,2.6,.32,.42,1.6]];
+const f=n=>String(n).replace('.',',');
+document.getElementById('nightRows').innerHTML=NC.map(([n,mv,r,d,re,sw,fl])=>`<tr><td>Noche ${n}</td><td>${f(mv[0])}–${f(mv[1])} s</td><td>${f(r)} s</td><td>${f(d)} s</td><td>${Math.round(re*100)} %</td><td>${Math.round(sw*100)} %</td><td>${f(fl)} energía</td></tr>`).join('');
+}
+</script>
+</body></html>

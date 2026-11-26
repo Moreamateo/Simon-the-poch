@@ -1015,8 +1015,8 @@ async function togglePhotoDoor(side){
   const pic=document.querySelector(`.side-scene[data-side="${side}"] .side-portrait img`);
   if(pic){pic.setAttribute('src',frames[0]);pic.dataset.doorState=state.state}
   if(closing)playDoorCloseSound(side);
-  // Cierre rápido (~32 ms por fotograma)
-  const ok=await playFrameSequence(frames,200,'door',token,idx=>{const f=Math.round(idx*6/(frames.length-1));state.frame=closing?f:6-f});
+  // Al bajar, la puerta golpea en ~90 ms para coincidir con el golpe del sonido (que suena desde el inicio); subir sigue en 200 ms.
+  const ok=await playFrameSequence(frames,closing?90:200,'door',token,idx=>{const f=Math.round(idx*6/(frames.length-1));state.frame=closing?f:6-f});
   if(!ok||token!==cameraMotion.nonce||!running)return;
   state.state=closing?'closed':'open';
   if(side==='left')left=closing;else right=closing;
@@ -1425,6 +1425,12 @@ function playNewGameIntro(){
  introActive=true;introStartedGame=false;clearIntroTimers();document.querySelector('.intro-night-mobile').innerHTML='<span>12:00 AM</span><span>Noche '+selectedNight+'</span>';
  introSequence.hidden=false;introStage('black');
  $('optionsPanel').hidden=true;$('menu').classList.add('hidden');syncMenuMusic();
+ // Noches 2-5: solo la interferencia y directo a la oficina (el periódico es solo de la noche 1).
+ if(selectedNight>1){
+  introAfter(250,()=>{introStage('static');noiseImpact()});
+  introAfter(990,revealOffice);
+  return;
+ }
  // Comienzo en negro, aparición progresiva de la foto y zoom lento.
  introAfter(250,()=>introStage('news'));
  introAfter(4700,()=>introStage('news-out'));
@@ -1446,8 +1452,8 @@ document.addEventListener('keydown',e=>{
 },true);
 
 prepareMenuHover();bindMenuHover();
-$('startBtn').onclick=()=>startSelectedNight();$('sewerGate').onclick=toggleSewerGate;renderNightMenu();
-$('continueBtn').onclick=()=>startSelectedNight(true);
+$('startBtn').onclick=()=>startSelectedNight(true);$('sewerGate').onclick=toggleSewerGate;renderNightMenu();
+$('continueBtn').onclick=()=>startSelectedNight();
 $('optionsBtn').onclick=()=>{$('optionsPanel').hidden=false;stopMenuHover()};
 $('optionsCloseBtn').onclick=()=>{$('optionsPanel').hidden=true;beep(510,.05)};
 $('optionsSoundBtn').onclick=()=>{muted=!muted;$('soundBtn').textContent=muted?'♪ OFF':'♪ ON';$('optionsSoundBtn').textContent=muted?'♪ SONIDO: OFF':'♪ SONIDO: ON';syncMenuMusic();if(!muted)beep(510,.07)};

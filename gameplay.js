@@ -19,8 +19,8 @@ function renderNightMenu(){
  const box=$('nightSelector');if(box){box.hidden=true;box.replaceChildren()}
  const startLbl=$('startNightLabel');
  const contLbl=$('continueNightLabel');
- if(startLbl)startLbl.textContent='Noche '+selectedNight;
- if(contLbl)contLbl.textContent='Noche '+currentNight;
+ if(startLbl)startLbl.textContent='Noche 1';
+ if(contLbl)contLbl.textContent='Noche '+selectedNight;
  const startSpan=$('startBtn')&&$('startBtn').querySelector('span');
  const contSpan=$('continueBtn')&&$('continueBtn').querySelector('span');
  if(startSpan)startSpan.textContent='New Game';
@@ -167,8 +167,9 @@ function playMovementSound(previous,next){
  const near=next===7||next===8,medium=next===6||next===10;
  playSpatialSound(side,side==='left'?-.9:.9,near?.5:medium?.29:.15,near?4200:medium?2300:1100);
 }
-async function startSelectedNight(retry=false){
- if(introActive)return;if(retry)selectedNight=currentNight;
+// New Game: borra el progreso y arranca en la noche 1. Continue: sigue en la noche guardada (la siguiente tras ganar, la misma tras perder).
+async function startSelectedNight(newGame=false){
+ if(introActive)return;if(newGame){unlockedNight=1;selectedNight=1;saveNights();renderNightMenu()}
  if(selectedNight>unlockedNight)return;
  $('startBtn').disabled=true;$('continueBtn').disabled=true;
  try{await Promise.all([unlockGameAudio(),jumpscareFramesReady,framesReady]);playNewGameIntro()}
